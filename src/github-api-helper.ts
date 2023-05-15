@@ -8,7 +8,7 @@ import * as retryHelper from './retry-helper'
 import * as toolCache from '@actions/tool-cache'
 import * as urlHelper from './url-helper'
 import {default as uuid} from 'uuid/v4'
-import {ReposGetArchiveLinkParams} from '@octokit/rest'
+import {getServerApiUrl} from './url-helper'
 
 const IS_WINDOWS = process.platform === 'win32'
 
@@ -18,12 +18,19 @@ export async function downloadRepository(
   repo: string,
   ref: string,
   commit: string,
-  repositoryPath: string
+  repositoryPath: string,
+  baseUrl?: string
 ): Promise<void> {
+  // Determine the default branch
+  if (!ref && !commit) {
+    core.info('Determining the default branch')
+    ref = await getDefaultBranch(authToken, owner, repo, baseUrl)
+  }
+
   // Download the archive
   let archiveData = await retryHelper.execute(async () => {
     core.info('Downloading the archive')
-    return await downloadArchive(authToken, owner, repo, ref, commit)
+    return await downloadArchive(authToken, owner, repo, ref, commit, baseUrl)
   })
 
   // Write archive to disk
@@ -42,7 +49,7 @@ export async function downloadRepository(
   } else {
     await toolCache.extractTar(archivePath, extractPath)
   }
-  io.rmRF(archivePath)
+  await io.rmRF(archivePath)
 
   // Determine the path of the repository content. The archive contains
   // a top-level folder and the repository content is inside.
@@ -65,7 +72,53 @@ export async function downloadRepository(
       await io.mv(sourcePath, targetPath)
     }
   }
-  io.rmRF(extractPath)
+  await io.rmRF(extractPath)
+}
+
+/**
+ * Looks up the default branch name
+ */
+export async function getDefaultBranch(
+  authToken: string,
+  owner: string,
+  repo: string,
+  baseUrl?: string
+): Promise<string> {
+  return await retryHelper.execute(async () => {
+    core.info('Retrieving the default branch name')
+    const octokit = github.getOctokit(authToken, {
+      baseUrl: getServerApiUrl(baseUrl)
+    })
+    let result: string
+    try {
+      // Get the default branch from the repo info
+      const response = await octokit.rest.repos.get({owner, repo})
+      result = response.data.default_branch
+      assert.ok(result, 'default_branch cannot be empty')
+    } catch (err) {
+      // Handle .wiki repo
+      if (
+        (err as any)?.status === 404 &&
+        repo.toUpperCase().endsWith('.WIKI')
+      ) {
+        result = 'master'
+      }
+      // Otherwise error
+      else {
+        throw err
+      }
+    }
+
+    // Print the default branch
+    core.info(`Default branch '${result}'`)
+
+    // Prefix with 'refs/heads'
+    if (!result.startsWith('refs/')) {
+      result = `refs/heads/${result}`
+    }
+
+    return result
+  })
 }
 
 async function downloadArchive(
@@ -73,21 +126,19 @@ async function downloadArchive(
   owner: string,
   repo: string,
   ref: string,
-  commit: string
+  commit: string,
+  baseUrl?: string
 ): Promise<Buffer> {
-  const octokit = new github.GitHub(authToken, {baseUrl: urlHelper.getApiUrl()})
-  const params: ReposGetArchiveLinkParams = {
+  const octokit = github.getOctokit(authToken, {
+    baseUrl: getServerApiUrl(baseUrl)
+  })
+  const download = IS_WINDOWS
+    ? octokit.rest.repos.downloadZipballArchive
+    : octokit.rest.repos.downloadTarballArchive
+  const response = await download({
     owner: owner,
     repo: repo,
-    archive_format: IS_WINDOWS ? 'zipball' : 'tarball',
     ref: commit || ref
-  }
-  const response = await octokit.repos.getArchiveLink(params)
-  if (response.status != 200) {
-    throw new Error(
-      `Unexpected response from GitHub API. Status: ${response.status}, Data: ${response.data}`
-    )
-  }
-
-  return Buffer.from(response.data) // response.data is ArrayBuffer
+  })
+  return Buffer.from(response.data as ArrayBuffer) // response.data is ArrayBuffer
 }

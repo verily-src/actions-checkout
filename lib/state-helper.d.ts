@@ -7,6 +7,10 @@ export declare const IsPost: boolean;
  */
 export declare const RepositoryPath: string;
 /**
+ * The set-safe-directory for the POST action. The value is set if input: 'safe-directory' is set during the MAIN action.
+ */
+export declare const PostSetSafeDirectory: boolean;
+/**
  * The SSH key path for the POST action. The value is empty during the MAIN action.
  */
 export declare const SshKeyPath: string;
@@ -26,3 +30,7 @@ export declare function setSshKeyPath(sshKeyPath: string): void;
  * Save the SSH known hosts path so the POST action can retrieve the value.
  */
 export declare function setSshKnownHostsPath(sshKnownHostsPath: string): void;
+/**
+ * Save the set-safe-directory input so the POST action can retrieve the value.
+ */
+export declare function setSafeDirectory(): void;

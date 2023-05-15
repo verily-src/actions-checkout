@@ -3,10 +3,10 @@ name: 'Functional Test'
 on:
   push:
     branches:
-      master
+      - master
   pull_request:
     branches:
-      master
+      - master
 
 jobs:
   test-defaults:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repo Locally
-      uses: verily-src/actions-checkout@master
+      uses: verily-src/actions-checkout@node-16
       with:
         path: actions-checkout
     - name: Checkout Repo
@@ -24,11 +24,11 @@ jobs:
     - id: defaults
       working-directory: test-checkout
       run: |
-        echo "::set-output name=sha::$(git show HEAD --pretty=format:%H --no-patch)"
-        echo "::set-output name=repo::$(git remote get-url origin | grep -oE [a-zA-Z0-9]+/[a-zA-Z0-9]+$)"
+        echo "sha=$(git show HEAD --pretty=format:%H --no-patch)" >> $GITHUB_OUTPUT
+        echo "repo=$(git remote get-url origin | grep -oE [a-zA-Z0-9-]+/[a-zA-Z0-9-]+$)" >> $GITHUB_OUTPUT
     - name: Check Repo
       working-directory: test-checkout
-      if: ${{ github.repo != steps.defaults.outputs.repo }}
+      if: ${{ github.repository != steps.defaults.outputs.repo }}
       run: failure()
     - name: Check Ref
       working-directory: test-checkout

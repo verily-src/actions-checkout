@@ -3,6 +3,7 @@ import * as exec from '@actions/exec'
 import * as fshelper from './fs-helper'
 import * as io from '@actions/io'
 import * as path from 'path'
+import * as refHelper from './ref-helper'
 import * as regexpHelper from './regexp-helper'
 import * as retryHelper from './retry-helper'
 import {GitVersion} from './git-version'
@@ -20,22 +21,27 @@ export interface IGitCommandManager {
   config(
     configKey: string,
     configValue: string,
-    globalConfig?: boolean
+    globalConfig?: boolean,
+    add?: boolean
   ): Promise<void>
   configExists(configKey: string, globalConfig?: boolean): Promise<boolean>
-  fetch(fetchDepth: number, refSpec: string[]): Promise<void>
+  fetch(refSpec: string[], fetchDepth?: number): Promise<void>
+  getDefaultBranch(repositoryUrl: string): Promise<string>
   getWorkingDirectory(): string
   init(): Promise<void>
   isDetached(): Promise<boolean>
   lfsFetch(ref: string): Promise<void>
   lfsInstall(): Promise<void>
-  log1(): Promise<void>
+  log1(format?: string): Promise<string>
   remoteAdd(remoteName: string, remoteUrl: string): Promise<void>
   removeEnvironmentVariable(name: string): void
+  revParse(ref: string): Promise<string>
   setEnvironmentVariable(name: string, value: string): void
+  shaExists(sha: string): Promise<boolean>
   submoduleForeach(command: string, recursive: boolean): Promise<string>
   submoduleSync(recursive: boolean): Promise<void>
   submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>
+  submoduleStatus(): Promise<boolean>
   tagExists(pattern: string): Promise<boolean>
   tryClean(): Promise<boolean>
   tryConfigUnset(configKey: string, globalConfig?: boolean): Promise<boolean>
@@ -89,8 +95,11 @@ class GitCommandManager {
 
     // Note, this implementation uses "rev-parse --symbolic-full-name" because the output from
     // "branch --list" is more difficult when in a detached HEAD state.
-    // Note, this implementation uses "rev-parse --symbolic-full-name" because there is a bug
-    // in Git 2.18 that causes "rev-parse --symbolic" to output symbolic full names.
+
+    // TODO(https://github.com/actions/checkout/issues/786): this implementation uses
+    // "rev-parse --symbolic-full-name" because there is a bug
+    // in Git 2.18 that causes "rev-parse --symbolic" to output symbolic full names. When
+    // 2.18 is no longer supported, we can switch back to --symbolic.
 
     const args = ['rev-parse', '--symbolic-full-name']
     if (remote) {
@@ -99,19 +108,47 @@ class GitCommandManager {
       args.push('--branches')
     }
 
-    const output = await this.execGit(args)
+    const stderr: string[] = []
+    const errline: string[] = []
+    const stdout: string[] = []
+    const stdline: string[] = []
 
-    for (let branch of output.stdout.trim().split('\n')) {
-      branch = branch.trim()
-      if (branch) {
-        if (branch.startsWith('refs/heads/')) {
-          branch = branch.substr('refs/heads/'.length)
-        } else if (branch.startsWith('refs/remotes/')) {
-          branch = branch.substr('refs/remotes/'.length)
-        }
-
-        result.push(branch)
+    const listeners = {
+      stderr: (data: Buffer) => {
+        stderr.push(data.toString())
+      },
+      errline: (data: Buffer) => {
+        errline.push(data.toString())
+      },
+      stdout: (data: Buffer) => {
+        stdout.push(data.toString())
+      },
+      stdline: (data: Buffer) => {
+        stdline.push(data.toString())
       }
+    }
+
+    // Suppress the output in order to avoid flooding annotations with innocuous errors.
+    await this.execGit(args, false, true, listeners)
+
+    core.debug(`stderr callback is: ${stderr}`)
+    core.debug(`errline callback is: ${errline}`)
+    core.debug(`stdout callback is: ${stdout}`)
+    core.debug(`stdline callback is: ${stdline}`)
+
+    for (let branch of stdline) {
+      branch = branch.trim()
+      if (!branch) {
+        continue
+      }
+
+      if (branch.startsWith('refs/heads/')) {
+        branch = branch.substring('refs/heads/'.length)
+      } else if (branch.startsWith('refs/remotes/')) {
+        branch = branch.substring('refs/remotes/'.length)
+      }
+
+      result.push(branch)
     }
 
     return result
@@ -136,14 +173,15 @@ class GitCommandManager {
   async config(
     configKey: string,
     configValue: string,
-    globalConfig?: boolean
+    globalConfig?: boolean,
+    add?: boolean
   ): Promise<void> {
-    await this.execGit([
-      'config',
-      globalConfig ? '--global' : '--local',
-      configKey,
-      configValue
-    ])
+    const args: string[] = ['config', globalConfig ? '--global' : '--local']
+    if (add) {
+      args.push('--add')
+    }
+    args.push(...[configKey, configValue])
+    await this.execGit(args)
   }
 
   async configExists(
@@ -164,17 +202,14 @@ class GitCommandManager {
     return output.exitCode === 0
   }
 
-  async fetch(fetchDepth: number, refSpec: string[]): Promise<void> {
-    const args = [
-      '-c',
-      'protocol.version=2',
-      'fetch',
-      '--no-tags',
-      '--prune',
-      '--progress',
-      '--no-recurse-submodules'
-    ]
-    if (fetchDepth > 0) {
+  async fetch(refSpec: string[], fetchDepth?: number): Promise<void> {
+    const args = ['-c', 'protocol.version=2', 'fetch']
+    if (!refSpec.some(x => x === refHelper.tagsRefSpec)) {
+      args.push('--no-tags')
+    }
+
+    args.push('--prune', '--progress', '--no-recurse-submodules')
+    if (fetchDepth && fetchDepth > 0) {
       args.push(`--depth=${fetchDepth}`)
     } else if (
       fshelper.fileExistsSync(
@@ -193,6 +228,34 @@ class GitCommandManager {
     await retryHelper.execute(async () => {
       await that.execGit(args)
     })
+  }
+
+  async getDefaultBranch(repositoryUrl: string): Promise<string> {
+    let output: GitOutput | undefined
+    await retryHelper.execute(async () => {
+      output = await this.execGit([
+        'ls-remote',
+        '--quiet',
+        '--exit-code',
+        '--symref',
+        repositoryUrl,
+        'HEAD'
+      ])
+    })
+
+    if (output) {
+      // Satisfy compiler, will always be set
+      for (let line of output.stdout.trim().split('\n')) {
+        line = line.trim()
+        if (line.startsWith('ref:') || line.endsWith('HEAD')) {
+          return line
+            .substr('ref:'.length, line.length - 'ref:'.length - 'HEAD'.length)
+            .trim()
+        }
+      }
+    }
+
+    throw new Error('Unexpected output when retrieving default branch')
   }
 
   getWorkingDirectory(): string {
@@ -225,8 +288,11 @@ class GitCommandManager {
     await this.execGit(['lfs', 'install', '--local'])
   }
 
-  async log1(): Promise<void> {
-    await this.execGit(['log', '-1'])
+  async log1(format?: string): Promise<string> {
+    var args = format ? ['log', '-1', format] : ['log', '-1']
+    var silent = format ? false : true
+    const output = await this.execGit(args, false, silent)
+    return output.stdout
   }
 
   async remoteAdd(remoteName: string, remoteUrl: string): Promise<void> {
@@ -237,8 +303,25 @@ class GitCommandManager {
     delete this.gitEnv[name]
   }
 
+  /**
+   * Resolves a ref to a SHA. For a branch or lightweight tag, the commit SHA is returned.
+   * For an annotated tag, the tag SHA is returned.
+   * @param {string} ref  For example: 'refs/heads/main' or '/refs/tags/v1'
+   * @returns {Promise<string>}
+   */
+  async revParse(ref: string): Promise<string> {
+    const output = await this.execGit(['rev-parse', ref])
+    return output.stdout.trim()
+  }
+
   setEnvironmentVariable(name: string, value: string): void {
     this.gitEnv[name] = value
+  }
+
+  async shaExists(sha: string): Promise<boolean> {
+    const args = ['rev-parse', '--verify', '--quiet', `${sha}^{object}`]
+    const output = await this.execGit(args, true)
+    return output.exitCode === 0
   }
 
   async submoduleForeach(command: string, recursive: boolean): Promise<string> {
@@ -273,6 +356,12 @@ class GitCommandManager {
     }
 
     await this.execGit(args)
+  }
+
+  async submoduleStatus(): Promise<boolean> {
+    const output = await this.execGit(['submodule', 'status'], true)
+    core.debug(output.stdout)
+    return output.exitCode === 0
   }
 
   async tagExists(pattern: string): Promise<boolean> {
@@ -343,7 +432,9 @@ class GitCommandManager {
 
   private async execGit(
     args: string[],
-    allowAllExitCodes = false
+    allowAllExitCodes = false,
+    silent = false,
+    customListeners = {}
   ): Promise<GitOutput> {
     fshelper.directoryExistsSync(this.workingDirectory, true)
 
@@ -357,21 +448,29 @@ class GitCommandManager {
       env[key] = this.gitEnv[key]
     }
 
-    const stdout: string[] = []
+    const defaultListener = {
+      stdout: (data: Buffer) => {
+        stdout.push(data.toString())
+      }
+    }
 
+    const mergedListeners = {...defaultListener, ...customListeners}
+
+    const stdout: string[] = []
     const options = {
       cwd: this.workingDirectory,
       env,
+      silent,
       ignoreReturnCode: allowAllExitCodes,
-      listeners: {
-        stdout: (data: Buffer) => {
-          stdout.push(data.toString())
-        }
-      }
+      listeners: mergedListeners
     }
 
     result.exitCode = await exec.exec(`"${this.gitPath}"`, args, options)
     result.stdout = stdout.join('')
+
+    core.debug(result.exitCode.toString())
+    core.debug(result.stdout)
+
     return result
   }
 
