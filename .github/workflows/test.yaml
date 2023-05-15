@@ -14,18 +14,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repo Locally
-      uses: verily-src/actions-checkout@master
+      uses: verily-src/actions-checkout@node-16 # TODO remove before merge
       with:
         path: actions-checkout
+        ref: manuadg/upgrade-upstream-node-16 # TODO remove before merge
     - name: Checkout Repo
       uses: ./actions-checkout
       with:
         path: test-checkout
+        ref: manuadg/upgrade-upstream-node-16 # TODO remove before merge
     - id: defaults
       working-directory: test-checkout
       run: |
-        echo "sha=$(git show HEAD --pretty=format:%H --no-patch)" >>> $GITHUB_STATE
-        echo "repo=$(git remote get-url origin | grep -oE "[a-zA-Z0-9-]+/[a-zA-Z0-9-]+")" >>> $GITHUB_STATE
+        echo "sha=$(git show HEAD --pretty=format:%H --no-patch)" >> $GITHUB_STATE
+        echo "repo=$(git remote get-url origin | grep -oE [a-zA-Z0-9-]+/[a-zA-Z0-9-]+$)" >> $GITHUB_STATE
+        echo "sha=$(git show HEAD --pretty=format:%H --no-patch)" 
+        echo "repo=$(git remote get-url origin | grep -oE [a-zA-Z0-9-]+/[a-zA-Z0-9-]+$)" 
     - name: Check Repo
       working-directory: test-checkout
       if: ${{ github.repo != steps.defaults.outputs.repo }}
