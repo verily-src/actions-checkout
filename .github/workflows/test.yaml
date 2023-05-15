@@ -24,8 +24,8 @@ jobs:
     - id: defaults
       working-directory: test-checkout
       run: |
-        echo "::set-output name=sha::$(git show HEAD --pretty=format:%H --no-patch)"
-        echo "::set-output name=repo::$(git remote get-url origin | grep -oE [a-zA-Z0-9]+/[a-zA-Z0-9]+$)"
+        echo "sha=$(git show HEAD --pretty=format:%H --no-patch)" >>> $GITHUB_STATE
+        echo "repo=$(git remote get-url origin | grep -oE [a-zA-Z0-9]+/[a-zA-Z0-9]+$)" >>> $GITHUB_STATE
     - name: Check Repo
       working-directory: test-checkout
       if: ${{ github.repo != steps.defaults.outputs.repo }}
