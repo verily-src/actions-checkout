@@ -42,7 +42,8 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
       git,
       settings.repositoryPath,
       repositoryUrl,
-      settings.clean
+      settings.clean,
+      settings.ref
     )
   }
 
@@ -102,6 +103,21 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
     await authHelper.configureAuth()
     core.endGroup()
 
+    // Determine the default branch
+    if (!settings.ref && !settings.commit) {
+      core.startGroup('Determining the default branch')
+      if (settings.sshKey) {
+        settings.ref = await git.getDefaultBranch(repositoryUrl)
+      } else {
+        settings.ref = await githubApiHelper.getDefaultBranch(
+          settings.authToken,
+          settings.repositoryOwner,
+          settings.repositoryName
+        )
+      }
+      core.endGroup()
+    }
+
     // LFS install
     if (settings.lfs) {
       await git.lfsInstall()
@@ -109,8 +125,24 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
 
     // Fetch
     core.startGroup('Fetching the repository')
-    const refSpec = refHelper.getRefSpec(settings.ref, settings.commit)
-    await git.fetch(settings.fetchDepth, refSpec)
+    if (settings.fetchDepth <= 0) {
+      // Fetch all branches and tags
+      let refSpec = refHelper.getRefSpecForAllHistory(
+        settings.ref,
+        settings.commit
+      )
+      await git.fetch(refSpec)
+
+      // When all history is fetched, the ref we're interested in may have moved to a different
+      // commit (push or force push). If so, fetch again with a targeted refspec.
+      if (!(await refHelper.testRef(git, settings.ref, settings.commit))) {
+        refSpec = refHelper.getRefSpec(settings.ref, settings.commit)
+        await git.fetch(refSpec)
+      }
+    } else {
+      const refSpec = refHelper.getRefSpec(settings.ref, settings.commit)
+      await git.fetch(refSpec, settings.fetchDepth)
+    }
     core.endGroup()
 
     // Checkout info
@@ -151,22 +183,6 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
           settings.fetchDepth,
           settings.nestedSubmodules
         )
-
-        // Check all submodules
-        const parseOwner = /github\.com[:\/]([^\/]*)\/[^\/]*\.git/
-        const output = await git.submoduleForeach(
-          'git remote get-url origin',
-          settings.nestedSubmodules
-        )
-        for (let line of output.split('\n')) {
-          let match = line.match(parseOwner) || []
-          if (match.length == 2 && match[1] != settings.repositoryOwner) {
-            throw new Error(
-              `Submodule '${match[0]}' is invalid. Expected '${settings.repositoryOwner}' as owner.`
-            )
-          }
-        }
-
         await git.submoduleForeach(
           'git config --local gc.auto 0',
           settings.nestedSubmodules
@@ -186,7 +202,17 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
     }
 
     // Dump some info about the checked out commit
-    await git.log1()
+    const commitInfo = await git.log1()
+
+    // Check for incorrect pull request merge commit
+    await refHelper.checkCommitInfo(
+      settings.authToken,
+      commitInfo,
+      settings.repositoryOwner,
+      settings.repositoryName,
+      settings.ref,
+      settings.commit
+    )
   } finally {
     // Remove auth
     if (!settings.persistCredentials) {

@@ -3,6 +3,7 @@ import * as exec from '@actions/exec'
 import * as fshelper from './fs-helper'
 import * as io from '@actions/io'
 import * as path from 'path'
+import * as refHelper from './ref-helper'
 import * as regexpHelper from './regexp-helper'
 import * as retryHelper from './retry-helper'
 import {GitVersion} from './git-version'
@@ -23,16 +24,19 @@ export interface IGitCommandManager {
     globalConfig?: boolean
   ): Promise<void>
   configExists(configKey: string, globalConfig?: boolean): Promise<boolean>
-  fetch(fetchDepth: number, refSpec: string[]): Promise<void>
+  fetch(refSpec: string[], fetchDepth?: number): Promise<void>
+  getDefaultBranch(repositoryUrl: string): Promise<string>
   getWorkingDirectory(): string
   init(): Promise<void>
   isDetached(): Promise<boolean>
   lfsFetch(ref: string): Promise<void>
   lfsInstall(): Promise<void>
-  log1(): Promise<void>
+  log1(): Promise<string>
   remoteAdd(remoteName: string, remoteUrl: string): Promise<void>
   removeEnvironmentVariable(name: string): void
+  revParse(ref: string): Promise<string>
   setEnvironmentVariable(name: string, value: string): void
+  shaExists(sha: string): Promise<boolean>
   submoduleForeach(command: string, recursive: boolean): Promise<string>
   submoduleSync(recursive: boolean): Promise<void>
   submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>
@@ -164,17 +168,14 @@ class GitCommandManager {
     return output.exitCode === 0
   }
 
-  async fetch(fetchDepth: number, refSpec: string[]): Promise<void> {
-    const args = [
-      '-c',
-      'protocol.version=2',
-      'fetch',
-      '--no-tags',
-      '--prune',
-      '--progress',
-      '--no-recurse-submodules'
-    ]
-    if (fetchDepth > 0) {
+  async fetch(refSpec: string[], fetchDepth?: number): Promise<void> {
+    const args = ['-c', 'protocol.version=2', 'fetch']
+    if (!refSpec.some(x => x === refHelper.tagsRefSpec)) {
+      args.push('--no-tags')
+    }
+
+    args.push('--prune', '--progress', '--no-recurse-submodules')
+    if (fetchDepth && fetchDepth > 0) {
       args.push(`--depth=${fetchDepth}`)
     } else if (
       fshelper.fileExistsSync(
@@ -193,6 +194,34 @@ class GitCommandManager {
     await retryHelper.execute(async () => {
       await that.execGit(args)
     })
+  }
+
+  async getDefaultBranch(repositoryUrl: string): Promise<string> {
+    let output: GitOutput | undefined
+    await retryHelper.execute(async () => {
+      output = await this.execGit([
+        'ls-remote',
+        '--quiet',
+        '--exit-code',
+        '--symref',
+        repositoryUrl,
+        'HEAD'
+      ])
+    })
+
+    if (output) {
+      // Satisfy compiler, will always be set
+      for (let line of output.stdout.trim().split('\n')) {
+        line = line.trim()
+        if (line.startsWith('ref:') || line.endsWith('HEAD')) {
+          return line
+            .substr('ref:'.length, line.length - 'ref:'.length - 'HEAD'.length)
+            .trim()
+        }
+      }
+    }
+
+    throw new Error('Unexpected output when retrieving default branch')
   }
 
   getWorkingDirectory(): string {
@@ -225,8 +254,9 @@ class GitCommandManager {
     await this.execGit(['lfs', 'install', '--local'])
   }
 
-  async log1(): Promise<void> {
-    await this.execGit(['log', '-1'])
+  async log1(): Promise<string> {
+    const output = await this.execGit(['log', '-1'])
+    return output.stdout
   }
 
   async remoteAdd(remoteName: string, remoteUrl: string): Promise<void> {
@@ -237,8 +267,25 @@ class GitCommandManager {
     delete this.gitEnv[name]
   }
 
+  /**
+   * Resolves a ref to a SHA. For a branch or lightweight tag, the commit SHA is returned.
+   * For an annotated tag, the tag SHA is returned.
+   * @param {string} ref  For example: 'refs/heads/master' or '/refs/tags/v1'
+   * @returns {Promise<string>}
+   */
+  async revParse(ref: string): Promise<string> {
+    const output = await this.execGit(['rev-parse', ref])
+    return output.stdout.trim()
+  }
+
   setEnvironmentVariable(name: string, value: string): void {
     this.gitEnv[name] = value
+  }
+
+  async shaExists(sha: string): Promise<boolean> {
+    const args = ['rev-parse', '--verify', '--quiet', `${sha}^{object}`]
+    const output = await this.execGit(args, true)
+    return output.exitCode === 0
   }
 
   async submoduleForeach(command: string, recursive: boolean): Promise<string> {

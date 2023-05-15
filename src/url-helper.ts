@@ -2,10 +2,6 @@ import * as assert from 'assert'
 import {IGitSourceSettings} from './git-source-settings'
 import {URL} from 'url'
 
-export function getApiUrl(): string {
-  return process.env['GITHUB_API_URL'] || 'https://api.github.com'
-}
-
 export function getFetchUrl(settings: IGitSourceSettings): string {
   assert.ok(
     settings.repositoryOwner,
@@ -24,5 +20,10 @@ export function getFetchUrl(settings: IGitSourceSettings): string {
 }
 
 export function getServerUrl(): URL {
-  return new URL(process.env['GITHUB_URL'] || 'https://github.com')
+  // todo: remove GITHUB_URL after support for GHES Alpha is no longer needed
+  return new URL(
+    process.env['GITHUB_SERVER_URL'] ||
+      process.env['GITHUB_URL'] ||
+      'https://github.com'
+  )
 }
