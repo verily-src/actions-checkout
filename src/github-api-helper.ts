@@ -6,8 +6,9 @@ import * as io from '@actions/io'
 import * as path from 'path'
 import * as retryHelper from './retry-helper'
 import * as toolCache from '@actions/tool-cache'
+import * as urlHelper from './url-helper'
 import {default as uuid} from 'uuid/v4'
-import {Octokit} from '@octokit/rest'
+import {ReposGetArchiveLinkParams} from '@octokit/rest'
 
 const IS_WINDOWS = process.platform === 'win32'
 
@@ -19,12 +20,6 @@ export async function downloadRepository(
   commit: string,
   repositoryPath: string
 ): Promise<void> {
-  // Determine the default branch
-  if (!ref && !commit) {
-    core.info('Determining the default branch')
-    ref = await getDefaultBranch(authToken, owner, repo)
-  }
-
   // Download the archive
   let archiveData = await retryHelper.execute(async () => {
     core.info('Downloading the archive')
@@ -73,46 +68,6 @@ export async function downloadRepository(
   io.rmRF(extractPath)
 }
 
-/**
- * Looks up the default branch name
- */
-export async function getDefaultBranch(
-  authToken: string,
-  owner: string,
-  repo: string
-): Promise<string> {
-  return await retryHelper.execute(async () => {
-    core.info('Retrieving the default branch name')
-    const octokit = new github.GitHub(authToken)
-    let result: string
-    try {
-      // Get the default branch from the repo info
-      const response = await octokit.repos.get({owner, repo})
-      result = response.data.default_branch
-      assert.ok(result, 'default_branch cannot be empty')
-    } catch (err) {
-      // Handle .wiki repo
-      if (err['status'] === 404 && repo.toUpperCase().endsWith('.WIKI')) {
-        result = 'master'
-      }
-      // Otherwise error
-      else {
-        throw err
-      }
-    }
-
-    // Print the default branch
-    core.info(`Default branch '${result}'`)
-
-    // Prefix with 'refs/heads'
-    if (!result.startsWith('refs/')) {
-      result = `refs/heads/${result}`
-    }
-
-    return result
-  })
-}
-
 async function downloadArchive(
   authToken: string,
   owner: string,
@@ -120,8 +75,8 @@ async function downloadArchive(
   ref: string,
   commit: string
 ): Promise<Buffer> {
-  const octokit = new github.GitHub(authToken)
-  const params: Octokit.ReposGetArchiveLinkParams = {
+  const octokit = new github.GitHub(authToken, {baseUrl: urlHelper.getApiUrl()})
+  const params: ReposGetArchiveLinkParams = {
     owner: owner,
     repo: repo,
     archive_format: IS_WINDOWS ? 'zipball' : 'tarball',

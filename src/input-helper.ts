@@ -19,23 +19,6 @@ export function getInputs(): IGitSourceSettings {
   result.repositoryOwner = github.context.repo.owner
   result.repositoryName = core.getInput('repository') || `${github.context.repo.repo}`
 
-  // Qualified repository
-  const qualifiedRepository =
-    core.getInput('repository') ||
-    `${github.context.repo.owner}/${github.context.repo.repo}`
-  core.debug(`qualified repository = '${qualifiedRepository}'`)
-  const splitRepository = qualifiedRepository.split('/')
-  if (
-    splitRepository.length !== 2 ||
-    !splitRepository[0] ||
-    !splitRepository[1]
-  ) {
-    throw new Error(
-      `Invalid repository '${qualifiedRepository}'. Expected format {owner}/{repo}.`
-    )
-  }
-  result.repositoryOwner = splitRepository[0]
-  result.repositoryName = splitRepository[1]
 
   // Repository path
   result.repositoryPath = core.getInput('path') || '.'
@@ -100,20 +83,14 @@ export function getInputs(): IGitSourceSettings {
   core.debug(`lfs = ${result.lfs}`)
 
   // Submodules
-  result.submodules = false
-  result.nestedSubmodules = false
-  const submodulesString = (core.getInput('submodules') || '').toUpperCase()
-  if (submodulesString == 'RECURSIVE') {
-    result.submodules = true
-    result.nestedSubmodules = true
-  } else if (submodulesString == 'TRUE') {
-    result.submodules = true
-  }
+  result.submodules = true
+  result.nestedSubmodules = true
+
   core.debug(`submodules = ${result.submodules}`)
   core.debug(`recursive submodules = ${result.nestedSubmodules}`)
 
   // Auth token
-  result.authToken = core.getInput('token', {required: true})
+  result.authToken = core.getInput('token')
 
   // SSH
   result.sshKey = core.getInput('ssh-key')
