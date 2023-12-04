@@ -79,7 +79,7 @@ inputs:
   lfs:
     description: 'Whether to download Git-LFS files'
     default: false
-  submodules-list:
+  submodule-list:
     description: >
       which submodules to checkout, in a space-separated list.  Defaults to all.
     default: ''
