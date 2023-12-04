@@ -230,15 +230,28 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
       await authHelper.configureGlobalAuth()
       core.endGroup()
 
-      // Checkout submodules
-      core.startGroup('Fetching submodules')
-      await git.submoduleSync(settings.nestedSubmodules)
-      await git.submoduleUpdate(settings.fetchDepth, settings.nestedSubmodules)
-      await git.submoduleForeach(
-        'git config --local gc.auto 0',
-        settings.nestedSubmodules
-      )
-      core.endGroup()
+      if (settings.submoduleList.length > 0) {
+        // Checkout specific submodules
+        core.startGroup('Fetching specific submodules')
+        await git.submoduleUpdateSpecific(
+          settings.fetchDepth,
+          settings.nestedSubmodules,
+          settings.submoduleList
+        )
+      } else {
+        // Checkout submodules
+        core.startGroup('Fetching submodules')
+        await git.submoduleSync(settings.nestedSubmodules)
+        await git.submoduleUpdate(
+          settings.fetchDepth,
+          settings.nestedSubmodules
+        )
+        await git.submoduleForeach(
+          'git config --local gc.auto 0',
+          settings.nestedSubmodules
+        )
+        core.endGroup()
+      }
 
       // Persist credentials
       if (settings.persistCredentials) {

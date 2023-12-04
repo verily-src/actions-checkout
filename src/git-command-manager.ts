@@ -52,6 +52,11 @@ export interface IGitCommandManager {
   submoduleForeach(command: string, recursive: boolean): Promise<string>
   submoduleSync(recursive: boolean): Promise<void>
   submoduleUpdate(fetchDepth: number, recursive: boolean): Promise<void>
+  submoduleUpdateSpecific(
+    fetchDepth: number,
+    recursive: boolean,
+    submodules: string[]
+  ): Promise<void>
   submoduleStatus(): Promise<boolean>
   tagExists(pattern: string): Promise<boolean>
   tryClean(): Promise<boolean>
@@ -407,6 +412,28 @@ class GitCommandManager {
 
     if (recursive) {
       args.push('--recursive')
+    }
+
+    await this.execGit(args)
+  }
+
+  async submoduleUpdateSpecific(
+    fetchDepth: number,
+    recursive: boolean,
+    submodules: string[]
+  ): Promise<void> {
+    const args = ['-c', 'protocol.version=2']
+    args.push('submodule', 'update', '--init', '--force')
+    if (fetchDepth > 0) {
+      args.push(`--depth=${fetchDepth}`)
+    }
+
+    if (recursive) {
+      args.push('--recursive')
+    }
+
+    for (const submodule of submodules) {
+      args.push(submodule)
     }
 
     await this.execGit(args)

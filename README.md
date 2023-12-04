@@ -102,14 +102,9 @@ Please refer to the [release page](https://github.com/actions/checkout/releases/
     # Default: false
     lfs: ''
 
-    # Whether to checkout submodules: `true` to checkout submodules or `recursive` to
-    # recursively checkout submodules.
-    #
-    # When the `ssh-key` input is not provided, SSH URLs beginning with
-    # `git@github.com:` are converted to HTTPS.
-    #
-    # Default: false
-    submodules: ''
+    # which submodules to checkout, in a space-separated list. Defaults to all.
+    # Default: 
+    submodules-list: ''
 
     # Add repository path as safe.directory for Git global config by running `git
     # config --global --add safe.directory <path>`

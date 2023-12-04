@@ -790,6 +790,22 @@ class GitCommandManager {
             yield this.execGit(args);
         });
     }
+    submoduleUpdateSpecific(fetchDepth, recursive, submodules) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const args = ['-c', 'protocol.version=2'];
+            args.push('submodule', 'update', '--init', '--force');
+            if (fetchDepth > 0) {
+                args.push(`--depth=${fetchDepth}`);
+            }
+            if (recursive) {
+                args.push('--recursive');
+            }
+            for (const submodule of submodules) {
+                args.push(submodule);
+            }
+            yield this.execGit(args);
+        });
+    }
     submoduleStatus() {
         return __awaiter(this, void 0, void 0, function* () {
             const output = yield this.execGit(['submodule', 'status'], true);
@@ -1302,12 +1318,19 @@ function getSource(settings) {
                 core.startGroup('Setting up auth for fetching submodules');
                 yield authHelper.configureGlobalAuth();
                 core.endGroup();
-                // Checkout submodules
-                core.startGroup('Fetching submodules');
-                yield git.submoduleSync(settings.nestedSubmodules);
-                yield git.submoduleUpdate(settings.fetchDepth, settings.nestedSubmodules);
-                yield git.submoduleForeach('git config --local gc.auto 0', settings.nestedSubmodules);
-                core.endGroup();
+                if (settings.submoduleList.length > 0) {
+                    // Checkout specific submodules
+                    core.startGroup('Fetching specific submodules');
+                    yield git.submoduleUpdateSpecific(settings.fetchDepth, settings.nestedSubmodules, settings.submoduleList);
+                }
+                else {
+                    // Checkout submodules
+                    core.startGroup('Fetching submodules');
+                    yield git.submoduleSync(settings.nestedSubmodules);
+                    yield git.submoduleUpdate(settings.fetchDepth, settings.nestedSubmodules);
+                    yield git.submoduleForeach('git config --local gc.auto 0', settings.nestedSubmodules);
+                    core.endGroup();
+                }
                 // Persist credentials
                 if (settings.persistCredentials) {
                     core.startGroup('Persisting credentials for submodules');
@@ -1762,16 +1785,12 @@ function getInputs() {
         // Submodules
         result.submodules = false;
         result.nestedSubmodules = false;
-        const submodulesString = (core.getInput('submodules') || '').toUpperCase();
-        if (submodulesString == 'RECURSIVE') {
-            result.submodules = true;
-            result.nestedSubmodules = true;
-        }
-        else if (submodulesString == 'TRUE') {
-            result.submodules = true;
-        }
         core.debug(`submodules = ${result.submodules}`);
         core.debug(`recursive submodules = ${result.nestedSubmodules}`);
+        const submoduleListInput = core.getInput('submodule-list');
+        core.debug(`submoduleListInput = '${submoduleListInput}'`);
+        result.submoduleList = (submoduleListInput || '').split(' ');
+        core.debug(`submodule list = ${result.submoduleList}`);
         // Auth token
         result.authToken = core.getInput('token', { required: true });
         // SSH
