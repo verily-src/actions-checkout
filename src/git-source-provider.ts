@@ -137,20 +137,31 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
     core.endGroup()
 
     // Submodules
-    if (settings.submodules) {
+    if (settings.submodules || settings.initSubmodules) {
       try {
         // Temporarily override global config
         core.startGroup('Setting up auth for fetching submodules')
         await authHelper.configureGlobalAuth()
         core.endGroup()
 
-        // Checkout submodules
-        core.startGroup('Fetching submodules')
-        await git.submoduleSync(settings.nestedSubmodules)
-        await git.submoduleUpdate(
-          settings.fetchDepth,
-          settings.nestedSubmodules
-        )
+        if(settings.submoduleList.length > 0) {
+          // Checkout specific submodules
+          core.startGroup('Fetching specific submodules')
+          await git.submoduleUpdateSpecific(
+            settings.fetchDepth,
+            settings.nestedSubmodules,
+            settings.submoduleList
+          )
+        }
+        else {
+          // Checkout submodules
+          core.startGroup('Fetching submodules')
+          await git.submoduleSync(settings.nestedSubmodules)
+          await git.submoduleUpdate(
+            settings.fetchDepth,
+            settings.nestedSubmodules
+          )
+        }
 
         // Check all submodules
         const parseOwner = /github\.com[:\/]([^\/]*)\/[^\/]*\.git/

@@ -50,6 +50,12 @@ export interface IGitSourceSettings {
   nestedSubmodules: boolean
 
   /**
+   * Indicates whether to only initialize specific submodules
+   */
+  submoduleList: string[]
+
+
+  /**
    * The auth token to use when fetching the repository
    */
   authToken: string

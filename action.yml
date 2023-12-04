@@ -44,6 +44,13 @@ inputs:
       and `CheckHostIP=no` to the SSH command line. Use the input `ssh-known-hosts` to
       configure additional hosts.
     default: true
+
+  submodule-list:
+    description: >
+      Which submodules to checkout. Accepts a space-separated list of submodule names.  All submodules must be in verily-src.  
+      If not specified, all submodules will be checked out.
+    default: ''
+
   persist-credentials:
     description: 'Whether to configure the token or SSH key with the local git config'
     default: true
