@@ -123,8 +123,8 @@ export async function getInputs(): Promise<IGitSourceSettings> {
   core.debug(`lfs = ${result.lfs}`)
 
   // Submodules
-  result.submodules = false
-  result.nestedSubmodules = false
+  result.submodules = true
+  result.nestedSubmodules = true
 
   core.debug(`submodules = ${result.submodules}`)
   core.debug(`recursive submodules = ${result.nestedSubmodules}`)
