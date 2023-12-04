@@ -159,12 +159,14 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
         }
         else {
           // Checkout submodules
-          core.startGroup('Fetching submodules')
-          await git.submoduleSync(settings.nestedSubmodules)
-          await git.submoduleUpdate(
-            settings.fetchDepth,
-            settings.nestedSubmodules
-          )
+          // core.startGroup('Fetching submodules')
+          // await git.submoduleSync(settings.nestedSubmodules)
+          // await git.submoduleUpdate(
+          //   settings.fetchDepth,
+          //   settings.nestedSubmodules
+          // )
+          core.startGroup("you shouldn't be here")
+          core.endGroup()
         }
 
         // Check all submodules
