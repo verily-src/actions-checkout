@@ -137,11 +137,15 @@ export async function getSource(settings: IGitSourceSettings): Promise<void> {
     core.endGroup()
 
     // Submodules
-    if (settings.submodules || settings.initSubmodules) {
+    if (settings.submodules) {
       try {
         // Temporarily override global config
         core.startGroup('Setting up auth for fetching submodules')
         await authHelper.configureGlobalAuth()
+        core.endGroup()
+        core.startGroup('Decidint whether to fetch specific submodules')
+        core.debug(`submoduleList = ${settings.submoduleList}`)
+        core.debug(`submoduleList.length = ${settings.submoduleList.length}`)
         core.endGroup()
 
         if(settings.submoduleList.length > 0) {

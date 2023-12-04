@@ -86,10 +86,13 @@ export function getInputs(): IGitSourceSettings {
   result.submodules = true
   result.nestedSubmodules = true
 
-  result.submoduleList = (core.getInput('submodule-list') || '').split(' ')
 
   core.debug(`submodules = ${result.submodules}`)
   core.debug(`recursive submodules = ${result.nestedSubmodules}`)
+
+  const submoduleListInput = core.getInput('submodule-list')
+  core.debug(`submoduleListInput = '${submoduleListInput}'`)
+  result.submoduleList = (submoduleListInput || '').split(' ')
   core.debug(`submodule list = ${result.submoduleList}`)
 
   // Auth token
