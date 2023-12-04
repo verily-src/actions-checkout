@@ -1783,8 +1783,8 @@ function getInputs() {
         result.lfs = (core.getInput('lfs') || 'false').toUpperCase() === 'TRUE';
         core.debug(`lfs = ${result.lfs}`);
         // Submodules
-        result.submodules = false;
-        result.nestedSubmodules = false;
+        result.submodules = true;
+        result.nestedSubmodules = true;
         core.debug(`submodules = ${result.submodules}`);
         core.debug(`recursive submodules = ${result.nestedSubmodules}`);
         const submoduleListInput = core.getInput('submodule-list');
