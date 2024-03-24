@@ -1,2 +1,7 @@
-import { IGitCommandManager } from './git-command-manager';
-export declare function prepareExistingDirectory(git: IGitCommandManager | undefined, repositoryPath: string, repositoryUrl: string, clean: boolean): Promise<void>;
+import { IGitCommandManager } from "./git-command-manager";
+export declare function prepareExistingDirectory(
+  git: IGitCommandManager | undefined,
+  repositoryPath: string,
+  repositoryUrl: string,
+  clean: boolean
+): Promise<void>;

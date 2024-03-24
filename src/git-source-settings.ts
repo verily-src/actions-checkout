@@ -2,75 +2,75 @@ export interface IGitSourceSettings {
   /**
    * The location on disk where the repository will be placed
    */
-  repositoryPath: string
+  repositoryPath: string;
 
   /**
    * The repository owner
    */
-  repositoryOwner: string
+  repositoryOwner: string;
 
   /**
    * The repository name
    */
-  repositoryName: string
+  repositoryName: string;
 
   /**
    * The ref to fetch
    */
-  ref: string
+  ref: string;
 
   /**
    * The commit to checkout
    */
-  commit: string
+  commit: string;
 
   /**
    * Indicates whether to clean the repository
    */
-  clean: boolean
+  clean: boolean;
 
   /**
    * The depth when fetching
    */
-  fetchDepth: number
+  fetchDepth: number;
 
   /**
    * Indicates whether to fetch LFS objects
    */
-  lfs: boolean
+  lfs: boolean;
 
   /**
    * Indicates whether to checkout submodules
    */
-  submodules: boolean
+  submodules: boolean;
 
   /**
    * Indicates whether to recursively checkout submodules
    */
-  nestedSubmodules: boolean
+  nestedSubmodules: boolean;
 
   /**
    * The auth token to use when fetching the repository
    */
-  authToken: string
+  authToken: string;
 
   /**
    * The SSH key to configure
    */
-  sshKey: string
+  sshKey: string;
 
   /**
    * Additional SSH known hosts
    */
-  sshKnownHosts: string
+  sshKnownHosts: string;
 
   /**
    * Indicates whether the server must be a known host
    */
-  sshStrict: boolean
+  sshStrict: boolean;
 
   /**
    * Indicates whether to persist the credentials on disk to enable scripting authenticated git commands
    */
-  persistCredentials: boolean
+  persistCredentials: boolean;
 }
