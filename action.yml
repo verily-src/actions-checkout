@@ -59,6 +59,6 @@ inputs:
     description: 'Whether to download Git-LFS files'
     default: false
 runs:
-  using: node20
+  using: node16
   main: dist/index.js
   post: dist/index.js
