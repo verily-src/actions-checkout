@@ -1,7 +1,5 @@
-<p align="center">
-  <a href="https://github.com/actions/checkout"><img alt="GitHub Actions status" src="https://github.com/actions/checkout/workflows/test-local/badge.svg"></a>
-</p>
-
+# :warning::warning: This Action has been deprecated. Please use the public version of [actions/checkout](https://github.com/actions/checkout) instead.
+ 
 # Org-only Checkout
 
 This is a customization of [actions/checkout@v2](https://github.com/actions/checkout) which only allows actions from within the same organization to be checked out even submodules. Subsequently, the input, repository: ` no longer requires the `{owner}/{repository}` pattern; only `{repository}` is necessary. Submodules must be recursively checked out with the repository and also must come from within the same organization.
